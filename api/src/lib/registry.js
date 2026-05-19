@@ -39,6 +39,16 @@ function encodeReference(reference) {
   return encodeURIComponent(reference);
 }
 
+function isNameUnknown(error) {
+  return error?.status === 404 && error?.details?.code === "NAME_UNKNOWN";
+}
+
+function warnSkippedRepository(repository, error) {
+  console.warn(
+    `[${new Date().toISOString()}] Skipping stale catalog repository ${repository}: ${error.message}`
+  );
+}
+
 async function mapLimit(items, limit, worker) {
   const results = new Array(items.length);
   let cursor = 0;
@@ -209,9 +219,23 @@ async function getRepositorySummary(repository) {
   };
 }
 
+async function getRepositorySummaryIfAvailable(repository) {
+  try {
+    return await getRepositorySummary(repository);
+  } catch (error) {
+    if (isNameUnknown(error)) {
+      warnSkippedRepository(repository, error);
+      return null;
+    }
+
+    throw error;
+  }
+}
+
 async function listRepositoriesWithSummary() {
   const repositories = await listCatalog();
-  return mapLimit(repositories, 5, getRepositorySummary);
+  const summaries = await mapLimit(repositories, 5, getRepositorySummaryIfAvailable);
+  return summaries.filter(Boolean);
 }
 
 async function listTagDetails(repository) {
@@ -232,15 +256,28 @@ async function deleteTag(repository, tag) {
 
 async function countRepositoriesAndTags() {
   const repositories = await listCatalog();
-  const tagLists = await mapLimit(repositories, 8, async (repository) => ({
-    repository,
-    tags: await listTags(repository)
-  }));
+  const tagLists = await mapLimit(repositories, 8, async (repository) => {
+    try {
+      return {
+        repository,
+        tags: await listTags(repository)
+      };
+    } catch (error) {
+      if (isNameUnknown(error)) {
+        warnSkippedRepository(repository, error);
+        return null;
+      }
+
+      throw error;
+    }
+  });
+
+  const availableTagLists = tagLists.filter(Boolean);
 
   return {
-    totalRepositories: repositories.length,
-    totalImages: repositories.length,
-    totalTags: tagLists.reduce((sum, item) => sum + item.tags.length, 0)
+    totalRepositories: availableTagLists.length,
+    totalImages: availableTagLists.length,
+    totalTags: availableTagLists.reduce((sum, item) => sum + item.tags.length, 0)
   };
 }
 
