@@ -6,3 +6,7 @@ services:
 networks:
   registry-net:
     internal: false
+  dokploy-network:
+    external: false
+    driver: bridge
+    internal: false

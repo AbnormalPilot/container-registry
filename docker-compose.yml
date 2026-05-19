@@ -123,11 +123,15 @@ services:
       registry-net:
         aliases:
           - nginx
+      dokploy-network:
 
 networks:
   registry-net:
     driver: bridge
     internal: true
+  dokploy-network:
+    external: true
+    name: ${DOKPLOY_PROXY_NETWORK:-dokploy-network}
 
 volumes:
   registry-data:

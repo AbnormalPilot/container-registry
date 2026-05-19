@@ -32,6 +32,12 @@ The `registry-setup` service creates `/auth/htpasswd` the first time the stack b
    - Path: `/`
    - HTTPS: enabled for production
 
+The `nginx` service is attached to Dokploy's Traefik network through the external `dokploy-network` network while `registry` and `node-api` remain on the private `registry-net` network. If your Dokploy installation uses a different proxy network name, set:
+
+```bash
+DOKPLOY_PROXY_NETWORK=your-dokploy-proxy-network
+```
+
 Deploy only `docker-compose.yml` in Dokploy. Do not include `docker-compose.local.yml`; that file is only for local testing.
 
 Do not publish this stack directly on the VPS port `80` in Dokploy. The production `docker-compose.yml` only exposes Nginx internally; Dokploy/Traefik should route the selected domain to the `nginx` service on container port `80`.
