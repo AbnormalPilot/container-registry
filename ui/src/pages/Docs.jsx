@@ -1,14 +1,11 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
-  ArrowRight,
   Check,
   Copy,
-  FileCode2,
   Globe2,
   LockKeyhole,
   PackageCheck,
-  Server,
   TerminalSquare
 } from "lucide-react";
 import api from "../api/client";
@@ -87,7 +84,7 @@ function CommandTerminal({ code, shell = true }) {
   );
 }
 
-function CommandCard({ step, icon: Icon, title, description, code, shell = true }) {
+function DirectCard({ icon: Icon, title, description, code }) {
   return (
     <section className="panel overflow-hidden">
       <div className="flex items-start justify-between gap-4 p-5">
@@ -96,7 +93,6 @@ function CommandCard({ step, icon: Icon, title, description, code, shell = true 
             <Icon size={19} aria-hidden="true" />
           </div>
           <div className="min-w-0">
-            <p className="fine-label">Step {step}</p>
             <h3 className="mt-1 text-[21px] font-semibold leading-[1.19] tracking-[0.231px] text-ink">{title}</h3>
             <p className="mt-2 text-[14px] leading-[1.43] tracking-[-0.224px] text-muted">{description}</p>
           </div>
@@ -104,21 +100,9 @@ function CommandCard({ step, icon: Icon, title, description, code, shell = true 
         <CopyButton value={code} className="shrink-0" />
       </div>
       <div className="px-3 pb-3 sm:px-5 sm:pb-5">
-        <CommandTerminal code={code} shell={shell} />
+        <CommandTerminal code={code} />
       </div>
     </section>
-  );
-}
-
-function MiniFact({ icon: Icon, label, value }) {
-  return (
-    <div className="rounded-[18px] border border-line bg-white p-5">
-      <div className="flex h-10 w-10 items-center justify-center rounded-full bg-wash text-primary">
-        <Icon size={18} aria-hidden="true" />
-      </div>
-      <dt className="mt-4 fine-label">{label}</dt>
-      <dd className="mt-2 break-words text-[17px] font-semibold leading-[1.24] tracking-[-0.374px] text-ink">{value}</dd>
-    </div>
   );
 }
 
@@ -129,158 +113,111 @@ export default function Docs() {
   });
 
   const host = data?.hostname || "registry.example.com";
-  const image = `${host}/library/alpine:latest`;
-  const appImage = `${host}/my-team/my-service:1.0.0`;
+  const dockerHost = host === "localhost" ? "localhost:80" : host;
+  const sourceImage = "alpine:latest";
+  const targetImage = `${dockerHost}/my-app:latest`;
+  const namespacedImage = `${dockerHost}/my-team/my-app:latest`;
 
   const commands = useMemo(
     () => ({
-      login: `docker login ${host}`,
-      push: `docker pull alpine:latest
-docker tag alpine:latest ${image}
-docker push ${image}`,
-      pull: `docker pull ${image}`,
-      compose: `services:
-  app:
-    image: ${appImage}
-    restart: unless-stopped
-    ports:
-      - "3000:3000"`,
-      build: `docker build -t ${appImage} .
-docker push ${appImage}`,
-      insecure: `{
-  "insecure-registries": ["${host}"]
-}`
+      login: `docker login ${dockerHost}`,
+      tagPush: `docker pull ${sourceImage}
+docker tag ${sourceImage} ${targetImage}
+docker push ${targetImage}`,
+      pull: `docker pull ${targetImage}`,
+      buildPush: `docker build -t ${targetImage} .
+docker push ${targetImage}`,
+      all: `docker login ${dockerHost}
+docker pull ${sourceImage}
+docker tag ${sourceImage} ${targetImage}
+docker push ${targetImage}
+docker pull ${targetImage}`,
+      dokployFields: `Registry URL: ${dockerHost}
+Image Prefix: leave empty
+Optional namespace prefix: my-team`
     }),
-    [appImage, host, image]
+    [dockerHost, sourceImage, targetImage]
   );
-
-  const commandCards = [
-    {
-      step: "01",
-      icon: LockKeyhole,
-      title: "Sign In From Docker",
-      description: "Use the same registry username and password you use for this dashboard.",
-      code: commands.login
-    },
-    {
-      step: "02",
-      icon: PackageCheck,
-      title: "Push A Test Image",
-      description: "Tag an existing image with this registry host, then push it through /v2/.",
-      code: commands.push
-    },
-    {
-      step: "03",
-      icon: TerminalSquare,
-      title: "Pull It Back",
-      description: "Verify the registry can serve the image to any Docker client with access to the domain.",
-      code: commands.pull
-    },
-    {
-      step: "04",
-      icon: FileCode2,
-      title: "Build And Publish Your App",
-      description: "Use the registry namespace as part of the tag in local builds or CI jobs.",
-      code: commands.build
-    }
-  ];
 
   return (
     <div className="max-w-6xl space-y-8">
-      <section className="overflow-hidden rounded-none bg-white">
-        <div className="grid gap-8 border-b border-line pb-8 lg:grid-cols-[minmax(0,0.92fr)_minmax(420px,1.08fr)] lg:items-end">
-          <div>
-            <h2 className="page-title">Add This Docker Registry</h2>
-            <p className="page-subtitle">
-              Copy the command, sign in with your registry credentials, then tag images with this host before pushing.
-            </p>
-            <div className="mt-5 flex flex-wrap items-center gap-3 text-[14px] leading-[1.43] tracking-[-0.224px] text-muted">
-              <span className="inline-flex min-h-9 items-center gap-2 rounded-full border border-line bg-pearl px-4">
-                <Globe2 size={15} aria-hidden="true" />
-                <span className="break-all">{host}</span>
-              </span>
-              <span className="inline-flex min-h-9 items-center gap-2 rounded-full border border-line bg-pearl px-4">
-                <Server size={15} aria-hidden="true" />
-                Docker Registry HTTP API v2
-              </span>
-            </div>
+      <section className="grid gap-8 border-b border-line bg-white pb-8 lg:grid-cols-[minmax(0,0.9fr)_minmax(420px,1.1fr)] lg:items-end">
+        <div>
+          <h2 className="page-title">Push And Pull Images</h2>
+          <p className="page-subtitle">
+            Use the registry hostname directly in the image name. No `/v2/`, no `https://`, no extra routing steps.
+          </p>
+          <div className="mt-5 inline-flex min-h-11 max-w-full items-center gap-2 rounded-full border border-line bg-pearl px-4 text-[14px] leading-[1.43] tracking-[-0.224px] text-muted">
+            <Globe2 size={15} aria-hidden="true" />
+            <span className="break-all">{dockerHost}</span>
           </div>
+        </div>
 
-          <div className="panel overflow-hidden">
-            <div className="flex items-center justify-between gap-4 border-b border-line bg-wash px-5 py-4">
-              <div>
-                <p className="fine-label">Start here</p>
-                <h3 className="mt-1 text-[21px] font-semibold leading-[1.19] tracking-[0.231px] text-ink">Login command</h3>
-              </div>
-              <CopyButton value={commands.login} className="shrink-0" />
+        <div className="panel overflow-hidden">
+          <div className="flex items-center justify-between gap-4 border-b border-line bg-wash px-5 py-4">
+            <div>
+              <p className="fine-label">Copy this</p>
+              <h3 className="mt-1 text-[21px] font-semibold leading-[1.19] tracking-[0.231px] text-ink">Full simple flow</h3>
             </div>
-            <div className="p-3 sm:p-5">
-              <CommandTerminal code={commands.login} />
-            </div>
+            <CopyButton value={commands.all} className="shrink-0" />
+          </div>
+          <div className="p-3 sm:p-5">
+            <CommandTerminal code={commands.all} />
           </div>
         </div>
       </section>
 
-      <dl className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        <MiniFact icon={Globe2} label="Registry Host" value={host} />
-        <MiniFact icon={LockKeyhole} label="Authentication" value="htpasswd credentials" />
-        <MiniFact icon={Server} label="Docker API Path" value="/v2/ is routed internally" />
-      </dl>
-
-      <section className="space-y-4">
-        <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-end">
-          <div>
-            <h3 className="text-[28px] font-semibold leading-[1.14] tracking-[0.196px] text-ink">Quick start</h3>
-            <p className="mt-1 text-[17px] leading-[1.47] tracking-[-0.374px] text-muted">
-              Run these from a machine that can reach the registry domain.
-            </p>
-          </div>
-          <div className="hidden items-center gap-2 text-[14px] leading-[1.43] tracking-[-0.224px] text-primary sm:flex">
-            Login
-            <ArrowRight size={15} aria-hidden="true" />
-            Push
-            <ArrowRight size={15} aria-hidden="true" />
-            Pull
-          </div>
-        </div>
-        <div className="grid gap-4 lg:grid-cols-2">
-          {commandCards.map((card) => (
-            <CommandCard key={card.step} {...card} />
-          ))}
-        </div>
-      </section>
+      <div className="grid gap-4 lg:grid-cols-3">
+        <DirectCard
+          icon={LockKeyhole}
+          title="1. Login"
+          description="Use the registry username and password."
+          code={commands.login}
+        />
+        <DirectCard
+          icon={PackageCheck}
+          title="2. Tag And Push"
+          description="Tag any local image with the registry host, then push it."
+          code={commands.tagPush}
+        />
+        <DirectCard
+          icon={TerminalSquare}
+          title="3. Pull"
+          description="Pull it back from any machine that can reach the registry."
+          code={commands.pull}
+        />
+      </div>
 
       <section className="grid gap-4 lg:grid-cols-[1.05fr_0.95fr]">
-        <CommandCard
-          step="05"
-          icon={FileCode2}
-          title="Use It In Docker Compose"
-          description="Reference the fully qualified image name in any Compose app that can authenticate to the registry."
-          code={commands.compose}
-          shell={false}
-        />
-
-        <div className="space-y-4">
-          <section className="rounded-[18px] border border-line bg-pearl p-6 text-[17px] leading-[1.47] tracking-[-0.374px] text-ink">
-            <div className="flex h-11 w-11 items-center justify-center rounded-full bg-white text-primary">
-              <LockKeyhole size={19} aria-hidden="true" />
+        <section className="rounded-[18px] border border-line bg-white p-6">
+          <h3 className="text-[21px] font-semibold leading-[1.19] tracking-[0.231px] text-ink">Image name rule</h3>
+          <p className="mt-2 text-[17px] leading-[1.47] tracking-[-0.374px] text-muted">
+            Put the registry hostname at the start of the image name.
+          </p>
+          <dl className="mt-5 grid gap-4">
+            <div>
+              <dt className="fine-label">Simple image</dt>
+              <dd className="mt-2 break-all font-mono text-[13px] tracking-normal text-ink">{targetImage}</dd>
             </div>
-            <h3 className="mt-4 text-[21px] font-semibold leading-[1.19] tracking-[0.231px] text-ink">HTTPS requirement</h3>
-            <p className="mt-2 text-muted">
-              In production, connect a Dokploy domain to the nginx service on port 80 and let Dokploy/Traefik terminate
-              HTTPS. Docker clients should use the HTTPS registry hostname.
-            </p>
-          </section>
+            <div>
+              <dt className="fine-label">With namespace</dt>
+              <dd className="mt-2 break-all font-mono text-[13px] tracking-normal text-ink">{namespacedImage}</dd>
+            </div>
+          </dl>
+        </section>
 
-          <CommandCard
-            step="Local"
-            icon={TerminalSquare}
-            title="HTTP Testing Only"
-            description="If you test plain HTTP on a local machine, add the registry host to Docker daemon settings and restart Docker."
-            code={commands.insecure}
-            shell={false}
-          />
-        </div>
+        <section className="panel overflow-hidden">
+          <div className="flex items-center justify-between gap-4 border-b border-line bg-wash px-5 py-4">
+            <div>
+              <p className="fine-label">Dokploy fields</p>
+              <h3 className="mt-1 text-[21px] font-semibold leading-[1.19] tracking-[0.231px] text-ink">Keep prefix simple</h3>
+            </div>
+            <CopyButton value={commands.dokployFields} className="shrink-0" />
+          </div>
+          <div className="p-3 sm:p-5">
+            <CommandTerminal code={commands.dokployFields} shell={false} />
+          </div>
+        </section>
       </section>
     </div>
   );

@@ -52,23 +52,16 @@ After the domain is configured and SSL is handled by Dokploy/Traefik:
 
 ```bash
 docker login registry.yourdomain.com
+docker tag alpine:latest registry.yourdomain.com/my-app:latest
+docker push registry.yourdomain.com/my-app:latest
+docker pull registry.yourdomain.com/my-app:latest
 ```
 
 Use `REGISTRY_USER` and `REGISTRY_PASSWORD`.
 
-Push an image:
+Image names should start with the registry hostname. Do not include `https://` or `/v2/` in Docker image names.
 
-```bash
-docker pull alpine:latest
-docker tag alpine:latest registry.yourdomain.com/library/alpine:latest
-docker push registry.yourdomain.com/library/alpine:latest
-```
-
-Pull it back:
-
-```bash
-docker pull registry.yourdomain.com/library/alpine:latest
-```
+For Dokploy's external registry form, use the registry hostname as the Registry URL. Leave Image Prefix empty, or set it to a namespace such as `my-team`; do not set Image Prefix to the registry hostname.
 
 ## Dashboard
 

@@ -33,6 +33,7 @@ services:
     restart: unless-stopped
     environment:
       REGISTRY_STORAGE_DELETE_ENABLED: "true"
+      REGISTRY_HTTP_RELATIVEURLS: "true"
       REGISTRY_HTTP_SECRET: ${REGISTRY_HTTP_SECRET:-change-me-registry-http-secret}
       HEALTHCHECK_USER: ${REGISTRY_USER:-admin}
       HEALTHCHECK_PASSWORD: ${REGISTRY_PASSWORD:-change-me}

@@ -7,6 +7,7 @@ networks:
   registry-net:
     internal: false
   dokploy-network:
+    name: ${LOCAL_DOKPLOY_NETWORK:-cr-local-dokploy-network}
     external: false
     driver: bridge
     internal: false
