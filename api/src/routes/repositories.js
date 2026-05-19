@@ -50,6 +50,22 @@ router.delete(/^\/repositories\/(.+)\/tags\/([^/]+)$/, async (req, res, next) =>
   }
 });
 
+router.delete(/^\/repositories\/(.+)$/, async (req, res, next) => {
+  try {
+    const repository = decodePathPart(req.params[0]);
+
+    const result = await withRegistryLock(`delete repository ${repository}`, async () => {
+      const deleted = await registry.deleteRepository(repository);
+      const gc = await runGarbageCollect();
+      return { deleted, gc };
+    });
+
+    return res.json(result);
+  } catch (error) {
+    return next(error);
+  }
+});
+
 router.get(/^\/repositories\/(.+)\/tags$/, async (req, res, next) => {
   try {
     const repository = decodePathPart(req.params[0]);

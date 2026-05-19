@@ -43,6 +43,10 @@ function isNameUnknown(error) {
   return error?.status === 404 && error?.details?.code === "NAME_UNKNOWN";
 }
 
+function isManifestUnknown(error) {
+  return error?.status === 404 && error?.details?.code === "MANIFEST_UNKNOWN";
+}
+
 function warnSkippedRepository(repository, error) {
   console.warn(
     `[${new Date().toISOString()}] Skipping stale catalog repository ${repository}: ${error.message}`
@@ -235,7 +239,7 @@ async function getRepositorySummaryIfAvailable(repository) {
 async function listRepositoriesWithSummary() {
   const repositories = await listCatalog();
   const summaries = await mapLimit(repositories, 5, getRepositorySummaryIfAvailable);
-  return summaries.filter(Boolean);
+  return summaries.filter((summary) => summary && summary.tagCount > 0);
 }
 
 async function listTagDetails(repository) {
@@ -252,6 +256,41 @@ async function deleteTag(repository, tag) {
   const digest = await resolveDigest(repository, tag);
   await client.delete(`/v2/${encodeRepositoryName(repository)}/manifests/${encodeReference(digest)}`);
   return { repository, tag, digest };
+}
+
+async function deleteManifestDigest(repository, digest) {
+  await client.delete(`/v2/${encodeRepositoryName(repository)}/manifests/${encodeReference(digest)}`);
+}
+
+async function deleteRepository(repository) {
+  const tagDetails = await listTagDetails(repository);
+  const digests = [
+    ...new Set(tagDetails.map((tag) => tag.digest).filter(Boolean))
+  ];
+
+  const deleted = [];
+  for (const digest of digests) {
+    try {
+      await deleteManifestDigest(repository, digest);
+      console.log(`[${new Date().toISOString()}] Deleted repository manifest ${repository}@${digest}`);
+      deleted.push(digest);
+    } catch (error) {
+      if (isManifestUnknown(error)) {
+        console.warn(`[${new Date().toISOString()}] Manifest already missing while deleting ${repository}@${digest}`);
+        continue;
+      }
+
+      throw error;
+    }
+  }
+
+  return {
+    repository,
+    deletedTags: tagDetails.map((tag) => tag.tag),
+    deletedDigests: deleted,
+    tagCount: tagDetails.length,
+    digestCount: deleted.length
+  };
 }
 
 async function countRepositoriesAndTags() {
@@ -272,7 +311,7 @@ async function countRepositoriesAndTags() {
     }
   });
 
-  const availableTagLists = tagLists.filter(Boolean);
+  const availableTagLists = tagLists.filter((item) => item && item.tags.length > 0);
 
   return {
     totalRepositories: availableTagLists.length,
@@ -290,5 +329,6 @@ module.exports = {
   listRepositoriesWithSummary,
   listTagDetails,
   deleteTag,
+  deleteRepository,
   countRepositoriesAndTags
 };
