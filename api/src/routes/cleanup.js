@@ -115,7 +115,21 @@ router.post("/cleanup/run", async (req, res, next) => {
       const failed = [];
 
       for (const repository of repositories) {
-        const tags = await registry.listTagDetails(repository);
+        let tags;
+
+        try {
+          tags = await registry.listTagDetails(repository);
+        } catch (error) {
+          if (registry.isNameUnknown(error)) {
+            console.warn(
+              `[${new Date().toISOString()}] Cleanup skipping stale catalog repository ${repository}: ${error.message}`
+            );
+            continue;
+          }
+
+          throw error;
+        }
+
         const toDelete = selectTagsForDeletion(tags, policy);
 
         for (const tag of toDelete) {

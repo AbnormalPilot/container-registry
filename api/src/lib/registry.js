@@ -330,5 +330,6 @@ module.exports = {
   listTagDetails,
   deleteTag,
   deleteRepository,
-  countRepositoriesAndTags
+  countRepositoriesAndTags,
+  isNameUnknown
 };
