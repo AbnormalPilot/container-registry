@@ -5,6 +5,12 @@ const config = require("./config");
 
 const docker = new Docker({ socketPath: "/var/run/docker.sock" });
 const EMPTY_REGISTRY_REPOSITORIES_ERROR = "Path not found: /docker/registry/v2/repositories";
+const SERVICE_LABELS = [
+  "com.docker.compose.service",
+  "com.docker.swarm.service.name",
+  "com.dokploy.service",
+  "com.dokploy.compose.service"
+];
 
 function createCollector() {
   const chunks = [];
@@ -27,24 +33,51 @@ async function findRegistryContainer() {
     return preferred;
   } catch {
     const containers = await docker.listContainers({ all: false });
-    const match = containers.find((container) => {
-      const names = container.Names || [];
-      const labels = container.Labels || {};
-      return (
-        names.includes(`/${config.registryContainerName}`) ||
-        labels["com.docker.compose.service"] === "registry" ||
-        labels["com.dokploy.service"] === "registry"
-      );
-    });
+    const match = containers.find((container) => isRegistryContainer(container, config.registryContainerName));
 
     if (!match) {
-      const error = new Error(`Unable to find running registry container named ${config.registryContainerName}`);
+      const knownContainers = containers
+        .map((container) => `${(container.Names || []).join(",") || container.Id}:${describeServiceLabel(container.Labels || {})}`)
+        .join("; ");
+      const error = new Error(
+        `Unable to find a running registry container for service "${config.registryContainerName}". ` +
+          "In Swarm/Dokploy, ensure node-api and registry run on the same node and the registry service is named registry. " +
+          `Visible containers: ${knownContainers || "none"}`
+      );
       error.status = 503;
       throw error;
     }
 
     return docker.getContainer(match.Id);
   }
+}
+
+function normalizeContainerName(name) {
+  return String(name || "").replace(/^\/+/, "");
+}
+
+function normalizeSwarmServiceName(name) {
+  return normalizeContainerName(name).split(".")[0];
+}
+
+function serviceNameMatches(value, expected) {
+  const name = normalizeSwarmServiceName(value);
+  return name === expected || name.endsWith(`_${expected}`) || name.endsWith(`-${expected}`);
+}
+
+function describeServiceLabel(labels) {
+  return SERVICE_LABELS.map((label) => labels[label]).find(Boolean) || "no-service-label";
+}
+
+function isRegistryContainer(container, expectedName) {
+  const labels = container.Labels || {};
+  const names = container.Names || [];
+
+  if (names.some((name) => serviceNameMatches(name, expectedName))) {
+    return true;
+  }
+
+  return SERVICE_LABELS.some((label) => serviceNameMatches(labels[label], expectedName));
 }
 
 async function readGcStatus() {

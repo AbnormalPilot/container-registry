@@ -94,6 +94,15 @@ The API serializes tag deletion, cleanup, and GC requests so those tasks do not 
 
 Policy and GC state are stored in the `registry-config` named volume. Image data is stored in `registry-data`.
 
+If `POST /api/cleanup/run` or `POST /api/gc/run` returns `500`, check the `node-api` logs first. The API uses `/var/run/docker.sock` to find the running `registry` container and exec garbage collection. In Swarm/Dokploy, keep `node-api` and `registry` on the same Docker node because Docker exec only works against containers visible on the local Docker socket.
+
+Useful checks on the node running `node-api`:
+
+```bash
+docker ps --format 'table {{.Names}}\t{{.Labels}}' | grep registry
+docker logs $(docker ps --filter label=com.docker.compose.service=node-api -q | head -n1) --tail=100
+```
+
 ## Local Checks
 
 Quick local run:
