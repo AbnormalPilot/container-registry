@@ -1,0 +1,135 @@
+services:
+  registry-setup:
+    image: httpd:2.4-alpine
+    restart: "no"
+    environment:
+      REGISTRY_USER: ${REGISTRY_USER:-admin}
+      REGISTRY_PASSWORD: ${REGISTRY_PASSWORD:-change-me}
+    command: >
+      sh -c '
+        set -eu;
+        if [ -z "$$REGISTRY_USER" ] || [ -z "$$REGISTRY_PASSWORD" ]; then
+          echo "REGISTRY_USER and REGISTRY_PASSWORD are required" >&2;
+          exit 1;
+        fi;
+        if [ ! -s /auth/htpasswd ]; then
+          echo "Creating htpasswd file for $$REGISTRY_USER";
+          htpasswd -Bbn "$$REGISTRY_USER" "$$REGISTRY_PASSWORD" > /auth/htpasswd;
+        else
+          echo "Using existing htpasswd file";
+        fi;
+        chmod 640 /auth/htpasswd;
+      '
+    volumes:
+      - registry-auth:/auth
+    networks:
+      registry-net:
+        aliases:
+          - registry-setup
+
+  registry:
+    image: registry:2
+    container_name: registry
+    restart: unless-stopped
+    environment:
+      REGISTRY_STORAGE_DELETE_ENABLED: "true"
+      REGISTRY_HTTP_SECRET: ${REGISTRY_HTTP_SECRET:-change-me-registry-http-secret}
+      HEALTHCHECK_USER: ${REGISTRY_USER:-admin}
+      HEALTHCHECK_PASSWORD: ${REGISTRY_PASSWORD:-change-me}
+    volumes:
+      - registry-data:/var/lib/registry
+      - registry-auth:/auth:ro
+      - ./registry/config.yml:/etc/docker/registry/config.yml:ro
+    expose:
+      - "5000"
+    depends_on:
+      registry-setup:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "AUTH=$$(printf \"%s:%s\" \"$$HEALTHCHECK_USER\" \"$$HEALTHCHECK_PASSWORD\" | base64 | tr -d '\\n'); wget -q --header \"Authorization: Basic $$AUTH\" -S -O- http://127.0.0.1:5000/v2/ 2>&1 | grep -Eq '200 OK|Docker-Distribution-Api-Version'"
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    networks:
+      registry-net:
+        aliases:
+          - registry
+
+  node-api:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      NODE_ENV: ${NODE_ENV:-production}
+      PORT: "3000"
+      REGISTRY_HOSTNAME: ${REGISTRY_HOSTNAME:-registry.yourdomain.com}
+      REGISTRY_URL: http://registry:5000
+      REGISTRY_USER: ${REGISTRY_USER:-admin}
+      REGISTRY_PASSWORD: ${REGISTRY_PASSWORD:-change-me}
+      JWT_SECRET: ${JWT_SECRET:-change-me-generate-a-long-random-secret}
+      JWT_ISSUER: registry-dashboard
+      JWT_AUDIENCE: registry-dashboard-ui
+      JWT_EXPIRES_IN: 8h
+      HTPASSWD_PATH: /auth/htpasswd
+      CONFIG_DIR: /config
+      REGISTRY_DATA_PATH: /var/lib/registry
+      REGISTRY_CONTAINER_NAME: registry
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - registry-auth:/auth:ro
+      - registry-config:/config
+      - registry-data:/var/lib/registry:ro
+    expose:
+      - "3000"
+    depends_on:
+      registry:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/health >/dev/null || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    networks:
+      registry-net:
+        aliases:
+          - node-api
+
+  nginx:
+    build:
+      context: .
+      dockerfile: ui/Dockerfile
+    restart: unless-stopped
+    expose:
+      - "80"
+    depends_on:
+      registry:
+        condition: service_healthy
+      node-api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/health >/dev/null || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    networks:
+      registry-net:
+        aliases:
+          - nginx
+
+networks:
+  registry-net:
+    driver: bridge
+    internal: true
+
+volumes:
+  registry-data:
+  registry-auth:
+  registry-config:

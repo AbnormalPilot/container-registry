@@ -1,0 +1,8 @@
+.DS_Store
+.env
+node_modules/
+api/node_modules/
+ui/node_modules/
+ui/dist/
+npm-debug.log*
+.playwright-mcp

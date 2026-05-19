@@ -1,0 +1,20 @@
+{
+  "name": "registry-dashboard-api",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Node.js middleware for the self-hosted Docker registry dashboard.",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js"
+  },
+  "dependencies": {
+    "axios": "^1.7.9",
+    "bcryptjs": "^2.4.3",
+    "compression": "^1.7.5",
+    "cors": "^2.8.5",
+    "dockerode": "^4.0.2",
+    "express": "^4.21.2",
+    "helmet": "^8.0.0",
+    "jsonwebtoken": "^9.0.2"
+  }
+}
